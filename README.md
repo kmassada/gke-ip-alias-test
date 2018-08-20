@@ -135,12 +135,13 @@ create new instance
 
 ```shell
 gcloud beta compute instances create instance-1 \
---zone=us-central1-c \
+--zone=$ZONE \
 --machine-type=n1-standard-1 \
 --subnet=$SUBNET \
---image=ubuntu-1710-artful-v20180405 \
+--network=$NETWORK \
+--image=ubuntu-1710-artful-v20180612 \
 --image-project=ubuntu-os-cloud \
---zone=$ZONE
+--tags=gke-$CLUSTER_NAME-client
 ```
 
 ssh and setup instance with `curl`
@@ -161,8 +162,42 @@ $ curl 10.56.0.2:31525
 
 ## Debug
 
+the goal is outlined with the illustration below. 
+
 ![img](./IpAlias-NodePort-containerPort.png)
 
-## Doesn't expose service pod
+This rule will allow all tcp traffic into nodes all the nodes in the cluster: `gke-$CLUSTER_NAME-$ID-node`, coming from: nodes in the same network with this tag:`gke-$CLUSTER_NAME-client`
 
-this doesn't apply to service pod
+```shell
+gcloud compute firewall-rules create "gke-$CLUSTER_NAME-$ID-allow-clients" \
+    --network $NETWORK \
+    --direction INGRESS \
+    --allow tcp \
+    --source-tags=gke-$CLUSTER_NAME-clients \
+    --target-tags=gke-$CLUSTER_NAME-$ID-node \
+    --description="Allow traffic to cluster from gke-$CLUSTER_NAME-clients into gke-$CLUSTER_NAME-$ID-node"
+```
+
+DO NOT DO THIS. by allowing traffic from all IPs in the network, from tag:`gke-$CLUSTER_NAME-client`. pods can be reached from any instance. in the network now.
+
+```shell
+gcloud compute firewall-rules create "gke-$CLUSTER_NAME-$ID-allow-clients-pods" \
+    --network $NETWORK \
+    --direction INGRESS \
+    --allow tcp \
+    --source-ranges=$SERVICES_IPV4_CIDR,$CLUSTER_IPV4_CIDR \
+    --description="Allow traffic to cluster from gke-$CLUSTER_NAME-clients into gke-$CLUSTER_NAME-$ID-node"
+```
+
+So, the rule above makes it seem it is possible for any instance in the network to also reach the service IP range. Yes, however the nodes do not know how to route this traffic. I tend to think of this as a feature. ClusterIP should only be for cluster bound routing.
+
+```console
+user@gke-neg-demo-z-default-pool-0bc6b28f-257m ~ $ sudo -i
+gke-neg-demo-z-default-pool-0bc6b28f-257m ~ # iptables-save > /tmp/out
+gke-neg-demo-z-default-pool-0bc6b28f-257m ~ # cat /tmp/out | grep 10.56
+...
+-A KUBE-SERVICES -d 10.56.17.6/32 -p tcp -m comment --comment "default/neg-demo-app: cluster IP" -m tcp --dport 80 -j KUBE-SVC-FW5EL4YJC6GLX6ZU
+-A KUBE-SERVICES ! -s 10.60.0.0/14 -d 10.56.24.97/32 -p tcp -m comment --comment "default/repro-service: cluster IP" -m tcp --dport 80 -j KUBE-MARK-MASQ
+-A KUBE-SERVICES -d 10.56.24.97/32 -p tcp -m comment --comment "default/repro-service: cluster IP" -m tcp --dport 80 -j KUBE-SVC-QR3HS5AQNBJEOPZP
+...
+```
