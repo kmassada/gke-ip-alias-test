@@ -162,11 +162,11 @@ $ curl 10.56.0.2:31525
 
 ## Debug
 
-the goal is outlined with the illustration below. 
+the goal is outlined with the illustration below.
 
 ![img](./IpAlias-NodePort-containerPort.png)
 
-This rule will allow all tcp traffic into nodes all the nodes in the cluster: `gke-$CLUSTER_NAME-$ID-node`, coming from: nodes in the same network with this tag:`gke-$CLUSTER_NAME-client`
+This rule will allow all tcp traffic into nodes all the nodes in the cluster: `gke-$CLUSTER_NAME-$ID-node`, coming from: nodes in the same network with this tag:`gke-$CLUSTER_NAME-client`.
 
 ```shell
 gcloud compute firewall-rules create "gke-$CLUSTER_NAME-$ID-allow-clients" \
@@ -178,18 +178,9 @@ gcloud compute firewall-rules create "gke-$CLUSTER_NAME-$ID-allow-clients" \
     --description="Allow traffic to cluster from gke-$CLUSTER_NAME-clients into gke-$CLUSTER_NAME-$ID-node"
 ```
 
-DO NOT DO THIS. by allowing traffic from all IPs in the network, from tag:`gke-$CLUSTER_NAME-client`. pods can be reached from any instance. in the network now.
-
-```shell
-gcloud compute firewall-rules create "gke-$CLUSTER_NAME-$ID-allow-clients-pods" \
-    --network $NETWORK \
-    --direction INGRESS \
-    --allow tcp \
-    --source-ranges=$SERVICES_IPV4_CIDR,$CLUSTER_IPV4_CIDR \
-    --description="Allow traffic to cluster from gke-$CLUSTER_NAME-clients into gke-$CLUSTER_NAME-$ID-node"
-```
-
 So, the rule above makes it seem it is possible for any instance in the network to also reach the service IP range. Yes, however the nodes do not know how to route this traffic. I tend to think of this as a feature. ClusterIP should only be for cluster bound routing.
+
+When `curl <CLUSTER_IP>:targetPort` is issued, it is routed by the default gateway. if service is spread accross nodes, the same node will be picked. Essentially being the same as `curl <NodeIP>:NodePort`
 
 ```console
 user@gke-neg-demo-z-default-pool-0bc6b28f-257m ~ $ sudo -i
