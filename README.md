@@ -178,9 +178,11 @@ gcloud compute firewall-rules create "gke-$CLUSTER_NAME-$ID-allow-clients" \
     --description="Allow traffic to cluster from gke-$CLUSTER_NAME-clients into gke-$CLUSTER_NAME-$ID-node"
 ```
 
-So, the rule above makes it seem it is possible for any instance in the network to also reach the service IP range. Yes, however the nodes do not know how to route this traffic. I tend to think of this as a feature. ClusterIP should only be for cluster bound routing.
+This will work because on cluster creation and subnetwork/secondaryrange creation, there's a gateway, this gateway understands to route traffic to those secondaryranges properly.
 
-When `curl <CLUSTER_IP>:targetPort` is issued, it is routed by the default gateway. if service is spread accross nodes, the same node will be picked. Essentially being the same as `curl <NodeIP>:NodePort`
+However, the rule above makes it seem it is possible for any instance in the network to also reach the service IP range too. Yes, however the nodes do not know how to route this traffic. I tend to think of this as a feature. ClusterIP should only be for cluster bound routing.
+
+When `curl <CLUSTER_IP>:targetPort` is issued, it is routed by the default gateway. if service is spread accross nodes, the same node will be picked. Essentially being the same as `curl <NodeIP>:NodePort`, defating the purpose of a cluster IP.
 
 ```console
 user@gke-neg-demo-z-default-pool-0bc6b28f-257m ~ $ sudo -i
